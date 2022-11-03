@@ -1,9 +1,9 @@
 import sys
 import json
 from socket import *
-
+import re
 topology = {}
-myNeighbours = {}
+myNeighbours = []
 
 
 def runController():
@@ -24,7 +24,7 @@ def runController():
         sentence = connectionSocket.recv(1024).decode()
         if(sentence=="neighbours"):
             response = topology[addr[0]]
-            m = {addr[0]  : response}
+            m = response
             send=json.dumps(m) 
             connectionSocket.send(bytes(send,encoding="utf-8"))
             connectionSocket.close()
@@ -42,7 +42,9 @@ def askForNeighbours():
     sentence = 'neighbours'
     clientSocket.send(sentence.encode())
     modifiedSentence = clientSocket.recv(1024)
-    print('From Server: ', modifiedSentence.decode("utf-8"))
+    neighbours = modifiedSentence.decode("utf-8")
+    myNeighbours = json.loads(neighbours)
+
     clientSocket.close()
 
 
@@ -59,8 +61,7 @@ def main():
     if(len(sys.argv) == 3):
         runController()
     else:
-        print("oi")
-        #runClient()
+        runClient()
    
     #capitalizedSentence = sentence.upper()
     #connectionSocket.send(capitalizedSentence.encode())
