@@ -1,70 +1,72 @@
+import socket
+import threading
+import time
 import sys
 import json
-from socket import *
-import re
+
+masterAdress = '10.0.2.10'
+masterPort = 3000
+
 topology = {}
 myNeighbours = []
 
-
-def runController():
-
-    # Opening JSON file
-    global topology
+def processamento(s : socket, msg : bytes, add : tuple):
     
+    if(msg.decode('utf-8') == "neighbours"):
+        response = topology[add[0]]
+        send=json.dumps(response) 
+        s.sendto(send.encode('utf-8'), add)
+
+
+def servico():
+
+    global topology
+
     with open(sys.argv[1]) as json_file:
         topology = json.load(json_file)
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.bind((masterAdress, masterPort))
+
+    print(f"Estou à escuta no {masterAdress}:{masterPort}")
+
+    while True:
+        msg, add = s.recvfrom(1024)
+        threading.Thread(target=processamento, args=(s, msg, add)).start()
+
+    s.close()
+
+
+
+def master():
+    threading.Thread(target=servico, args=()).start()
+
+
+def getNeighbours(s):
+
+    global myNeighbours
+
+    msg = 'neighbours'
+
+    s.sendto(msg.encode('utf-8'), (masterAdress, 3000))
+    answer, server_add = s.recvfrom(1024)
+    myNeighbours = json.loads(answer.decode('utf-8'))
+
+    s.close()
+
+
+
+def client():
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    getNeighbours(s)
+
     
-    serverPort = 12000
-    serverSocket = socket(AF_INET, SOCK_STREAM)
-    serverSocket.bind(("", serverPort))
-    serverSocket.listen()
-
-    while(True):
-        connectionSocket, addr = serverSocket.accept()
-        sentence = connectionSocket.recv(1024).decode()
-        if(sentence=="neighbours"):
-            response = topology[addr[0]]
-            m = response
-            send=json.dumps(m) 
-            connectionSocket.send(bytes(send,encoding="utf-8"))
-            connectionSocket.close()
 
 
+if __name__ == "__main__":
 
-
-def askForNeighbours():
-
-    controllerIP = sys.argv[1]
-
-    clientSocket = socket(AF_INET, SOCK_STREAM)
-    clientSocket.connect((controllerIP, 12000))
-
-    sentence = 'neighbours'
-    clientSocket.send(sentence.encode())
-    modifiedSentence = clientSocket.recv(1024)
-    neighbours = modifiedSentence.decode("utf-8")
-    myNeighbours = json.loads(neighbours)
-
-    clientSocket.close()
-
-
-
-def runClient():
-
-    askForNeighbours()
-
-
-
-def main():
-
-    # Verificar se é controlador ou cliente
     if(len(sys.argv) == 3):
-        runController()
+        master()
     else:
-        runClient()
-   
-    #capitalizedSentence = sentence.upper()
-    #connectionSocket.send(capitalizedSentence.encode())
-
-
-main()
+        client()
