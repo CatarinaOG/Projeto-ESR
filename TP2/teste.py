@@ -6,25 +6,17 @@ import json
 
 masterAddress = '10.0.2.10'
 masterPort1 = 3000
-masterPort2 = 4000
 
 nodePort1 = 3000
-nodePort2 = 4000
-
-
-nodeAddress = ''
 
 topology_master = {}
-myNeighbours_client = []
 myNeighbours_node = []
 
-ip_client = '' 
 ip_node = ''
 
 nodes_master = 0
 
 best_node = {}
-route_node = []
 
 #-----------------------------Master------------------------------------
 
@@ -42,7 +34,6 @@ def sendEachNeighbours(s : socket, msg : bytes, add : tuple):
         }
 
         send=json.dumps(info)
-        print("add: ",add)
         s.sendto(send.encode('utf-8'), add)
 
 
@@ -85,16 +76,18 @@ def flood():
 
         info = {
             "type" : 'update',
+            "server" : masterAddress,
             "from" : masterAddress,
             "depth" : 0,
             "start_time" : time.time(),
             "totalDelay" : 0,
-            "route" : [masterAddress]
+            "route" : []
         }
 
         for neighbour in neighbours:
             print("Enviei para " + neighbour + "info: " + json.dumps(info))
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.bind((masterAddress,masterPort1))
             infoJSON = json.dumps(info)
             s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
 
@@ -146,49 +139,64 @@ def client():
 #}
 
 
+def continueFlood1(msg : bytes, add : tuple, s : socket.socket, lock : threading.Lock):
+
+    global myNeighbours_node
+    global best_node
+    global ip_node
+
+    info = json.loads(msg.decode('utf-8'))
+    #print("-----------------------------------")
+    #print("recebi: ",info)
+    #print("-----------------------------------")
+
+
+    if(info['type'] == 'update'):
+        info['depth'] += 1
+        info['totalDelay'] += time.time() - info['start_time']
+        info['start_time'] = time.time()
+
+    if(len(best_node) == 0):
+        lock.acquire()
+        best_node = info
+        best_node["route"].append(add[0])
+        best_node["from"] = add[0]
+        lock.release()
+
+    elif (best_node['totalDelay'] > info['totalDelay']):
+        lock.acquire()
+        best_node = info
+        best_node["route"].append(add[0])
+        best_node["from"] = add[0]
+        lock.release()
+
+    for neighbour in myNeighbours_node:
+        if(neighbour != add[0] and neighbour not in best_node["route"]):
+            print("-----------------------------------")
+            print('Enviar para ' + neighbour)
+            print('info : ', info)
+            print("-----------------------------------")
+
+            infoJSON = json.dumps(best_node)
+            time.sleep(0.5)
+            s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
+
+
 def continueFlood():
 
     global ip_node
-    global myNeighbours_node
-    global best_node
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((ip_node, nodePort1))
     
     print("NODE: ip: "+ip_node + " porta: "+str(nodePort1))
+
+    lock = threading.Lock()
     
     while(True):
         msg, add = s.recvfrom(1024)
-    
-        info = json.loads(msg.decode('utf-8'))
-        print("recebi: ",info)
-
-        if(info['type'] == 'update'):
-            info['depth'] += 1
-            info['totalDelay'] += time.time() - info['start_time']
-            info['start_time'] = time.time()
-
-            if(len(best_node) == 0)
-                best_node["totalDelay"] = info["totalDelay"] 
-                best_node["from"] = info["from"] 
-                best_node["route"] = info["route"] 
-                best_node['route'].append(add[0])
-
-            elif (best_node['totalDelay'] > info['totalDelay'])
-                best_node["totalDelay"] = info["totalDelay"] 
-                best_node["from"] = info["from"] 
-                best_node["route"] = info["route"] 
-                best_node['route'].append(add[0])
-
-            print()
-
-            for neighbour in myNeighbours_node:
-                if(neighbour != add[0]):
-                    print('Enviar para ' + neighbour + "na porta: " + str(nodePort1))
-                    print('info : ', info)
-                    infoJSON = json.dumps(best_node)
-                    time.sleep(0.5)
-                    s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
+        threading.Thread(target=continueFlood1, args=(msg,add,s,lock)).start()
+        
 
 #-----------------
 
@@ -202,7 +210,6 @@ def node():
     myNeighbours_node = getNeighbours()
     print("neighbours: ",myNeighbours_node)
     
-
     continueFlood()
     
 
