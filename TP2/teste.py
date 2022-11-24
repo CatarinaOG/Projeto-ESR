@@ -45,13 +45,13 @@ def getTopology():
 
 
 def sendEachNeighbours(s : socket, msg : bytes, add : tuple):
-    
+
     global topology_master
 
     if(msg.decode('utf-8') == "neighbours"):
 
         response = topology_master[add[0]]
-        
+
         info = {
             'ip' : add[0],
             'neighbours' : response
@@ -118,7 +118,7 @@ def server():
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((serverAddress, serverPort1))
-    
+
     getTopology()
 
     if(isMaster):
@@ -127,7 +127,7 @@ def server():
     else:
         print("waiting")
         msg, add = s.recvfrom(1024)
-    
+
     print("not waiting anymroe")
 
     time.sleep(1) # necessário para cada nodo ler os seus vizinhos e preparar a socket
@@ -138,11 +138,12 @@ def server():
 
 #------------------------------Node + client---------------------------------
 
+# vai ter de ser alterado para ser apenas à um servidor
 def getNeighbours(s):
 
     msg = 'neighbours'
     s.sendto(msg.encode('utf-8'), (serverAddress, serverPort1))
-    
+
     answer, server_add = s.recvfrom(1024)
 
     return json.loads(answer.decode('utf-8'))['neighbours']
@@ -158,7 +159,7 @@ def getNodeName(add):
     elif(add == '10.0.5.1'): return "N1"
     elif(add == '10.0.3.10'): return "S1"
     elif(add == '10.0.2.10'): return "S2"
-    
+
 
 def getNodeNameInList(lista):
 
@@ -170,7 +171,8 @@ def getNodeNameInList(lista):
     return newlist
 
 
-def continueFlood1(msg : bytes, add : tuple, s : socket.socket, lock : threading.Lock):
+# vai ter de guardar para cada um dos servidores
+def continueEachFlood(msg : bytes, add : tuple, s : socket.socket, lock : threading.Lock):
 
     global myNeighbours
     global best_route
@@ -204,7 +206,7 @@ def continueFlood1(msg : bytes, add : tuple, s : socket.socket, lock : threading
         best_route["route"].append(ip_node)
         best_route["from"] = ip_node
         best_route_changed = True
-        
+
     if(best_route_changed):
         for neighbour in myNeighbours:
             if(neighbour != add[0] and neighbour not in neighboursFlood):
@@ -216,6 +218,8 @@ def continueFlood1(msg : bytes, add : tuple, s : socket.socket, lock : threading
                 infoJSON = json.dumps(best_route)
                 s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
 
+
+
     lock.release()
 
     print("BEST ROUTE: ",getNodeNameInList(best_route['route']))
@@ -226,11 +230,11 @@ def continueFlood(s):
     global ip_node
 
     lock = threading.Lock()
-    
+
     while(True):
         msg, add = s.recvfrom(1024)
-        threading.Thread(target=continueFlood1, args=(msg,add,s,lock)).start()
-        
+        threading.Thread(target=continueEachFlood, args=(msg,add,s,lock)).start()
+
 
 #-----------------
 
@@ -259,7 +263,7 @@ def node():
     myNeighbours = getNeighbours(s)
 
     continueFlood(s)
-    
+
 
 
 
@@ -268,12 +272,12 @@ def node():
 if __name__ == "__main__":
 
     if(len(sys.argv) == 5 and sys.argv[1] == 'server'):
-        # python3 teste.py server <ip_server> config.json master 
+        # python3 teste.py server <ip_server> config.json master
         isMaster = True
         server()
 
     elif(len(sys.argv) == 4 and sys.argv[1] == 'server'):
-        # python3 teste.py server <ip_server> config.json 
+        # python3 teste.py server <ip_server> config.json
         server()
 
     elif(len(sys.argv) == 4 and sys.argv[1] == 'node'):
