@@ -7,10 +7,12 @@ import json
 
 # ----- Master Globals ------
 
-masterAddress = '10.0.2.10'
-masterPort1 = 3000
+serverAddress = ''
+serverPort1 = 3000
 nodes_master = 0
 topology_master = {}
+isMaster = False
+servers = []
 
 
 # ------ Node Globals ------
@@ -20,8 +22,27 @@ myNeighbours = []
 ip_node = ''
 best_route = {}
 neighboursFlood = []
+servers_node = []
 
 #-----------------------------Master------------------------------------
+
+
+def getTopology():
+    global topology_master
+    global nodes_master
+    global servers
+
+    with open(sys.argv[3]) as json_file:
+        file = json.load(json_file)
+        servers = file['servers']
+        topology_master = file['neighbours']
+
+    for key in topology_master:
+        nodes_master += 1
+
+    nodes_master -= 1 + len(servers)
+
+
 
 def sendEachNeighbours(s : socket, msg : bytes, add : tuple):
     
@@ -36,75 +57,81 @@ def sendEachNeighbours(s : socket, msg : bytes, add : tuple):
             'neighbours' : response
         }
 
+        print("sent: ",info)
+
         send=json.dumps(info)
         s.sendto(send.encode('utf-8'), add)
 
 
-#-----------------
 
-def getTopology():
-    global topology_master
-    global nodes_master
 
-    with open(sys.argv[2]) as json_file:
-        topology_master = json.load(json_file)
 
-    for key in topology_master:
-        nodes_master += 1
 
-    nodes_master -= 1
 
-#----------------
-
-def sendNeighbours():
+def sendNeighbours(s):
 
     global nodes_master
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind((masterAddress, masterPort1))
-
     nodes = 0
+
     while nodes < nodes_master:
         msg, add = s.recvfrom(1024)
         threading.Thread(target=sendEachNeighbours, args=(s, msg, add)).start()
         nodes += 1
 
 
-#----------------
 
-def flood():
 
-    #while(True):
-        neighbours = topology_master[masterAddress]
+def flood(s):
+    neighbours = topology_master[serverAddress]
 
-        info = {
-            "type" : 'update',
-            "server" : masterAddress,
-            "from" : masterAddress,
-            "depth" : 0,
-            "start_time" : time.time(),
-            "totalDelay" : 0,
-            "route" : [masterAddress]
-        }
+    info = {
+        "type" : 'update',
+        "server" : serverAddress,
+        "from" : serverAddress,
+        "depth" : 0,
+        "start_time" : time.time(),
+        "totalDelay" : 0,
+        "route" : [serverAddress]
+    }
 
-        time.sleep(1) # necessário para cada nodo ler os seus vizinhos e preparar a socket
 
-        for neighbour in neighbours:
-            print("Enviei para " + neighbour + "info: " + json.dumps(info))
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.bind((masterAddress,masterPort1))
-            infoJSON = json.dumps(info)
-            s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
+    for neighbour in neighbours:
+        print("Enviei para " + neighbour + "info: " + json.dumps(info))
+        infoJSON = json.dumps(info)
+        s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
 
-    #    time.sleep(1000)
 
-#-----------------
 
-def master():
 
+def notifyOtherServers(s):
+
+    for server in servers:
+        s.sendto("start".encode('utf-8'), (server, serverPort1))
+
+
+
+
+def server():
+
+    global serverAddress
+    serverAddress = sys.argv[2]
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.bind((serverAddress, serverPort1))
+    
     getTopology()
-    sendNeighbours()
-    threading.Thread(target=flood, args=()).start()
+
+    if(isMaster):
+        sendNeighbours(s)
+        notifyOtherServers(s)
+    else:
+        print("waiting")
+        msg, add = s.recvfrom(1024)
+    
+    print("not waiting anymroe")
+
+    time.sleep(1) # necessário para cada nodo ler os seus vizinhos e preparar a socket
+    threading.Thread(target=flood, args=(s,)).start()
 
 
 
@@ -114,37 +141,24 @@ def master():
 def getNeighbours(s):
 
     msg = 'neighbours'
-    s.sendto(msg.encode('utf-8'), (masterAddress, masterPort1))
+    s.sendto(msg.encode('utf-8'), (serverAddress, serverPort1))
+    
     answer, server_add = s.recvfrom(1024)
 
     return json.loads(answer.decode('utf-8'))['neighbours']
-
-#---------------------------------Client---------------------------------
-
-def client():
-
-    print("cliente")
 
 
 
 #----------------------------------Node--------------------------------
 
-#info = {
-#    "type" : 'update',
-#    "from" : masterAddress,
-#    "depth" : 0,
-#    "start_time" : time.time()
-#    "totalDelay" : 0,
-#    "route" : []
-#}
-
 def getNodeName(add):
 
     if (add == '10.0.3.1'): return "N2"
-    elif (add == '10.0.2.1'): return "N3"
+    elif(add == '10.0.2.1'): return "N3"
     elif(add == '10.0.5.1'): return "N1"
-    elif(add == '10.0.2.10'): return "S1"
-
+    elif(add == '10.0.3.10'): return "S1"
+    elif(add == '10.0.2.10'): return "S2"
+    
 
 def getNodeNameInList(lista):
 
@@ -166,7 +180,6 @@ def continueFlood1(msg : bytes, add : tuple, s : socket.socket, lock : threading
     best_route_changed = False
 
     lock.acquire()
-
 
     info = json.loads(msg.decode('utf-8'))
     neighboursFlood.append(info['from'])
@@ -221,19 +234,30 @@ def continueFlood(s):
 
 #-----------------
 
+
+def getServers():
+
+    with open(sys.argv[3]) as json_file:
+        file = json.load(json_file)
+        return file['servers']
+
+
 def node():
 
+    global serverAddress
+    global servers_node
     global ip_node
-    global nodePort1
     global myNeighbours
 
-    ip_node = sys.argv[3]
+    ip_node = sys.argv[2]
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((ip_node, nodePort1))
 
+    servers_node = getServers()
+    serverAddress = servers_node[0]
     myNeighbours = getNeighbours(s)
-    
+
     continueFlood(s)
     
 
@@ -243,16 +267,17 @@ def node():
 
 if __name__ == "__main__":
 
-    if(len(sys.argv) == 3 and sys.argv[1] == 'master'):
-        # python3 teste.py master config.json 
-        master()
+    if(len(sys.argv) == 5 and sys.argv[1] == 'server'):
+        # python3 teste.py server <ip_server> config.json master 
+        isMaster = True
+        server()
+
+    elif(len(sys.argv) == 4 and sys.argv[1] == 'server'):
+        # python3 teste.py server <ip_server> config.json 
+        server()
 
     elif(len(sys.argv) == 4 and sys.argv[1] == 'node'):
-        # python3 teste.py node 10.0.2.10 <ip_nodo>
+        # python3 teste.py node <ip_nodo> configNode.json
         node()
-    
-    else:
-        # python3 teste.py 10.0.2.10
-        client()
 
 #----------------------------------------------------------
