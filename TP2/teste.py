@@ -20,7 +20,7 @@ servers = []
 nodePort1 = 3000
 myNeighbours = []
 ip_node = ''
-best_route = {}
+best_routes = {}
 neighboursFlood = []
 servers_node = []
 
@@ -45,13 +45,13 @@ def getTopology():
 
 
 def sendEachNeighbours(s : socket, msg : bytes, add : tuple):
-
+    
     global topology_master
 
     if(msg.decode('utf-8') == "neighbours"):
 
         response = topology_master[add[0]]
-
+        
         info = {
             'ip' : add[0],
             'neighbours' : response
@@ -96,7 +96,7 @@ def flood(s):
 
 
     for neighbour in neighbours:
-        print("Enviei para " + neighbour + "info: " + json.dumps(info))
+        print("Enviei para " + neighbour + "- ROUTE: " , info['route'])
         infoJSON = json.dumps(info)
         s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
 
@@ -118,18 +118,15 @@ def server():
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((serverAddress, serverPort1))
-
+    
     getTopology()
 
     if(isMaster):
         sendNeighbours(s)
         notifyOtherServers(s)
     else:
-        print("waiting")
         msg, add = s.recvfrom(1024)
-
-    print("not waiting anymroe")
-
+    
     time.sleep(1) # necessário para cada nodo ler os seus vizinhos e preparar a socket
     threading.Thread(target=flood, args=(s,)).start()
 
@@ -138,12 +135,11 @@ def server():
 
 #------------------------------Node + client---------------------------------
 
-# vai ter de ser alterado para ser apenas à um servidor
 def getNeighbours(s):
 
     msg = 'neighbours'
     s.sendto(msg.encode('utf-8'), (serverAddress, serverPort1))
-
+    
     answer, server_add = s.recvfrom(1024)
 
     return json.loads(answer.decode('utf-8'))['neighbours']
@@ -159,7 +155,7 @@ def getNodeName(add):
     elif(add == '10.0.5.1'): return "N1"
     elif(add == '10.0.3.10'): return "S1"
     elif(add == '10.0.2.10'): return "S2"
-
+    
 
 def getNodeNameInList(lista):
 
@@ -171,58 +167,60 @@ def getNodeNameInList(lista):
     return newlist
 
 
-# vai ter de guardar para cada um dos servidores
-def continueEachFlood(msg : bytes, add : tuple, s : socket.socket, lock : threading.Lock):
+def updateBestRoutes(info):
+
+    global best_routes
+
+    info['depth'] += 1
+    info['totalDelay'] += time.time() - info['start_time']
+    info['start_time'] = time.time()
+
+    if(len(best_routes) == 0):
+        best_routes = info
+        best_routes["route"].append(ip_node)
+        best_routes["from"] = ip_node
+        return True
+
+    elif (best_routes['totalDelay'] > info['totalDelay']):
+        best_routes = info
+        best_routes["route"].append(ip_node)
+        best_routes["from"] = ip_node
+        return True
+    
+    return False
+
+
+def continueFlood1(msg : bytes, add : tuple, s : socket.socket, lock : threading.Lock):
 
     global myNeighbours
-    global best_route
     global ip_node
-    global neighboursFlood
 
-    best_route_changed = False
+    changed = False
 
     lock.acquire()
 
     info = json.loads(msg.decode('utf-8'))
-    neighboursFlood.append(info['from'])
 
     print("-----------------------------------")
     print('Recebi de ' + getNodeName(info['from']) + "--- ROUTE: ",getNodeNameInList(info['route']))
     print("-----------------------------------")
 
-    if(info['type'] == 'update'):
-        info['depth'] += 1
-        info['totalDelay'] += time.time() - info['start_time']
-        info['start_time'] = time.time()
+    changed = updateBestRoutes(info)
 
-    if(len(best_route) == 0):
-        best_route = info
-        best_route["route"].append(ip_node)
-        best_route["from"] = ip_node
-        best_route_changed = True
-
-    elif (best_route['totalDelay'] > info['totalDelay']):
-        best_route = info
-        best_route["route"].append(ip_node)
-        best_route["from"] = ip_node
-        best_route_changed = True
-
-    if(best_route_changed):
+    if(changed):
         for neighbour in myNeighbours:
-            if(neighbour != add[0] and neighbour not in neighboursFlood):
+            if(neighbour != add[0]):
 
                 print("-----------------------------------")
                 print('Enviar para ' + getNodeName(neighbour) + "--- ROUTE: ",getNodeNameInList(info['route']))
                 print("-----------------------------------")
 
-                infoJSON = json.dumps(best_route)
+                infoJSON = json.dumps(best_routes)
                 s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
-
-
 
     lock.release()
 
-    print("BEST ROUTE: ",getNodeNameInList(best_route['route']))
+    print("BEST ROUTE: ",getNodeNameInList(best_routes['route']))
 
 
 def continueFlood(s):
@@ -230,11 +228,11 @@ def continueFlood(s):
     global ip_node
 
     lock = threading.Lock()
-
+    
     while(True):
         msg, add = s.recvfrom(1024)
-        threading.Thread(target=continueEachFlood, args=(msg,add,s,lock)).start()
-
+        threading.Thread(target=continueFlood1, args=(msg,add,s,lock)).start()
+        
 
 #-----------------
 
@@ -263,7 +261,7 @@ def node():
     myNeighbours = getNeighbours(s)
 
     continueFlood(s)
-
+    
 
 
 
@@ -272,12 +270,12 @@ def node():
 if __name__ == "__main__":
 
     if(len(sys.argv) == 5 and sys.argv[1] == 'server'):
-        # python3 teste.py server <ip_server> config.json master
+        # python3 teste.py server <ip_server> config.json master 
         isMaster = True
         server()
 
     elif(len(sys.argv) == 4 and sys.argv[1] == 'server'):
-        # python3 teste.py server <ip_server> config.json
+        # python3 teste.py server <ip_server> config.json 
         server()
 
     elif(len(sys.argv) == 4 and sys.argv[1] == 'node'):
