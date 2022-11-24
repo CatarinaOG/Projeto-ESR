@@ -7,7 +7,7 @@ import json
 
 # ----- Master Globals ------
 
-masterAddress = '10.0.2.10'
+masterAddress = ''
 masterPort1 = 3000
 nodes_master = 0
 topology_master = {}
@@ -46,7 +46,7 @@ def getTopology():
     global topology_master
     global nodes_master
 
-    with open(sys.argv[2]) as json_file:
+    with open(sys.argv[3]) as json_file:
         topology_master = json.load(json_file)
 
     for key in topology_master:
@@ -64,53 +64,59 @@ def sendNeighbours():
     s.bind((masterAddress, masterPort1))
 
     nodes = 0
+
+    # não pode ser assim para todos os servidores, só 1
     while nodes < nodes_master:
         msg, add = s.recvfrom(1024)
         threading.Thread(target=sendEachNeighbours, args=(s, msg, add)).start()
         nodes += 1
 
 
+
 #----------------
 
 def flood():
 
-    #while(True):
-        neighbours = topology_master[masterAddress]
+    neighbours = topology_master[masterAddress]
 
-        info = {
-            "type" : 'update',
-            "server" : masterAddress,
-            "from" : masterAddress,
-            "depth" : 0,
-            "start_time" : time.time(),
-            "totalDelay" : 0,
-            "route" : [masterAddress]
-        }
+    info = {
+        "type" : 'update',
+        "server" : masterAddress,
+        "from" : masterAddress,
+        "depth" : 0,
+        "start_time" : time.time(),
+        "totalDelay" : 0,
+        "route" : [masterAddress]
+    }
 
-        time.sleep(1) # necessário para cada nodo ler os seus vizinhos e preparar a socket
+    time.sleep(1) # necessário para cada nodo ler os seus vizinhos e preparar a socket
 
-        for neighbour in neighbours:
-            print("Enviei para " + neighbour + "info: " + json.dumps(info))
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.bind((masterAddress,masterPort1))
-            infoJSON = json.dumps(info)
-            s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
+    for neighbour in neighbours:
+        print("Enviei para " + neighbour + "info: " + json.dumps(info))
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind((masterAddress,masterPort1))
+        infoJSON = json.dumps(info)
+        s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
 
-    #    time.sleep(1000)
 
 #-----------------
 
 def master():
 
+    global masterAddress
+
+    masterAddress = sys.argv[2]
+
     getTopology()
     sendNeighbours()
-    threading.Thread(target=flood, args=()).start()
+    flood()
 
 
 
 
 #------------------------------Node + client---------------------------------
 
+# vai ter de ser alterado para ser apenas à um servidor
 def getNeighbours(s):
 
     msg = 'neighbours'
@@ -156,7 +162,8 @@ def getNodeNameInList(lista):
     return newlist
 
 
-def continueFlood1(msg : bytes, add : tuple, s : socket.socket, lock : threading.Lock):
+# vai ter de guardar para cada um dos servidores
+def continueEachFlood(msg : bytes, add : tuple, s : socket.socket, lock : threading.Lock):
 
     global myNeighbours
     global best_route
@@ -166,7 +173,6 @@ def continueFlood1(msg : bytes, add : tuple, s : socket.socket, lock : threading
     best_route_changed = False
 
     lock.acquire()
-
 
     info = json.loads(msg.decode('utf-8'))
     neighboursFlood.append(info['from'])
@@ -203,6 +209,8 @@ def continueFlood1(msg : bytes, add : tuple, s : socket.socket, lock : threading
                 infoJSON = json.dumps(best_route)
                 s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
 
+
+
     lock.release()
 
     print("BEST ROUTE: ",getNodeNameInList(best_route['route']))
@@ -216,7 +224,7 @@ def continueFlood(s):
     
     while(True):
         msg, add = s.recvfrom(1024)
-        threading.Thread(target=continueFlood1, args=(msg,add,s,lock)).start()
+        threading.Thread(target=continueEachFlood, args=(msg,add,s,lock)).start()
         
 
 #-----------------
@@ -244,11 +252,11 @@ def node():
 if __name__ == "__main__":
 
     if(len(sys.argv) == 3 and sys.argv[1] == 'master'):
-        # python3 teste.py master config.json 
+        # python3 teste.py master <ip_server> config.json 
         master()
 
     elif(len(sys.argv) == 4 and sys.argv[1] == 'node'):
-        # python3 teste.py node 10.0.2.10 <ip_nodo>
+        # python3 teste.py node <ip_server> <ip_nodo>
         node()
     
     else:
