@@ -25,7 +25,8 @@ myNeighbours = []
 ip_node = ''
 best_routes = {}
 neighboursFlood = []
-servers_node = []
+serversNode = []
+bestServer = {}
 
 #-----------------------------Master------------------------------------
 
@@ -77,16 +78,14 @@ def sendNeighbours(s):
 
 
 
-
 def flood(s):
     neighbours = topology_master[serverAddress]
 
     info = {
-        "type" : 'update',
         "server" : serverAddress,
         "from" : serverAddress,
         "depth" : 0,
-        "start_time" : time.time(),
+        "startTime" : time.time(),
         "totalDelay" : 0,
         "route" : [serverAddress]
     }
@@ -107,8 +106,7 @@ def notifyOtherServers(s):
 def getEachFloodBack(msg,add):
     
     global best_routes_to_nodes
-    best_routes_to_nodes[add] = json.loads(msg.decode('utf-8'))
-    print("recebi flood: ",best_routes_to_nodes[add]['route'])
+    best_routes_to_nodes[add[0]] = json.loads(msg.decode('utf-8'))
 
 
 def getFloodBack(s):
@@ -120,7 +118,36 @@ def getFloodBack(s):
         msg, add = s.recvfrom(1024)
         threading.Thread(target=getEachFloodBack, args=(msg,add)).start()
         nodes += 1
-        print(nodes)
+
+
+def sendMonitoring(s):
+
+    global serverAddress
+    global nodePort2
+    global best_routes_to_nodes
+
+    while(True):
+
+        time.sleep(5)
+
+        for node in best_routes_to_nodes:
+            copy_routes = list(best_routes_to_nodes[node]['route'])
+            copy_routes.pop(0)
+
+            info = {
+                "server" : serverAddress,
+                "depth" : len(copy_routes),
+                "startTime" : time.time(),
+                "totalDelay" : 0,
+                "route" : best_routes_to_nodes[node]['route'],
+                "path" : copy_routes
+            }
+
+            nextHop = copy_routes[0]
+            infoJSON = json.dumps(info)
+            s.sendto(infoJSON.encode('utf-8'), (nextHop, nodePort2))
+
+        time.sleep(20)
 
 
 
@@ -146,8 +173,13 @@ def server():
         msg, add = s.recvfrom(1024) # espera pelo sinal do master para continuar
     
     time.sleep(1) # necessário para cada nodo ler os seus vizinhos e preparar a socket
+
     flood(s)
-    getFloodBack(s1)
+    getFloodBack(s1) # necessário outra porta por alguma razão...
+
+    #meter numa thread
+    sendMonitoring(s1)
+    
 
 
 
@@ -194,8 +226,8 @@ def updateBestRoutes(info):
     global ip_node
 
     info['depth'] += 1
-    info['totalDelay'] += time.time() - info['start_time']
-    info['start_time'] = time.time()
+    info['totalDelay'] += time.time() - info['startTime']
+    info['startTime'] = time.time()
 
     server = info['server']
 
@@ -221,7 +253,6 @@ def continueEachFlood(msg : bytes, add : tuple, s : socket.socket, lock : thread
     changed = False
 
     
-
     lock.acquire()
 
     info = json.loads(msg.decode('utf-8'))
@@ -270,7 +301,6 @@ def sendBackFlood(s):
 
     for server in best_routes:
         infoJSON = json.dumps(best_routes[server])
-        print(infoJSON)
         s.sendto(infoJSON.encode('utf-8'), (server, serverPort2))
 
 
@@ -282,10 +312,70 @@ def getServers():
         return file['servers']
 
 
+#info = {
+#    "server" : serverAddress,
+#    "depth" : 0,
+#    "startTime" : time.time(),
+#    "totalDelay" : 0,
+#    "route" : best_routes_to_nodes[node]['route'],
+#    "path" : best_routes_to_nodes[node]['route']
+#}
+
+def continueEachMonitoring(msg,s,lock):
+
+    global nodePort2
+    global bestServer
+
+    info = json.loads(msg.decode('utf-8'))
+
+    if(len(info['path']) > 1):
+        info['path'].pop(0)
+        nextHop = info['path'][0]        
+        infoJSON = json.dumps(info)
+        s.sendto(infoJSON.encode('utf-8'), (nextHop, nodePort2))
+    
+    else:
+        lock.acquire()
+        info["totalDelay"] = time.time() - info["startTime"]
+        
+        if(not bestServer):
+            bestServer['server'] = info['server']
+            bestServer['delay'] = info['totalDelay']
+            bestServer['depth'] = info['depth']
+
+        else:
+            if(bestServer['delay'] == info['totalDelay']):
+                if(bestServer['depth'] >= info['depth']):
+                    bestServer['server'] = info['server']
+                    bestServer['delay'] = info['totalDelay']
+                    bestServer['depth'] = info['depth']
+            else:
+                if(bestServer['delay'] > info['totalDelay']):
+                    bestServer['server'] = info['server']
+                    bestServer['delay'] = info['totalDelay']
+                    bestServer['depth'] = info['depth']
+
+        lock.release()
+
+        print("BestServer: ",bestServer)
+
+
+
+def continueMonitoring(s):
+
+    lock = threading.Lock()
+
+    while(True):
+        msg, add = s.recvfrom(1024)
+        threading.Thread(target=continueEachMonitoring, args=(msg,s,lock)).start()
+
+
+
+
 def node():
 
     global serverAddress
-    global servers_node
+    global serversNode
     global ip_node
     global myNeighbours
     global nodePort1
@@ -299,13 +389,15 @@ def node():
     s1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s1.bind((ip_node, nodePort2))
 
-    servers_node = getServers()
-    serverAddress = servers_node[0]
+    serversNode = getServers()
+    serverAddress = serversNode[0]
     myNeighbours = getNeighbours(s)
 
     threading.Thread(target=continueFlood, args=(s,)).start()
-    time.sleep(5)
+    time.sleep(5) # para tentar tirar...
     sendBackFlood(s1)
+
+    continueMonitoring(s1)
     
 
 
