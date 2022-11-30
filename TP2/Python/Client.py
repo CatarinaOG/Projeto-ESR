@@ -20,7 +20,7 @@ class Client:
 	TEARDOWN = 3
 	
 	# Initiation..
-	def __init__(self, master, serveraddr, serverport, rtpport, filename):
+	def __init__(self, master, serveraddr, serverport, rtpport, filename,myAddress):
 		self.master = master
 		self.master.protocol("WM_DELETE_WINDOW", self.handler)
 		self.createWidgets()
@@ -34,6 +34,7 @@ class Client:
 		self.teardownAcked = 0
 		self.connectToServer()
 		self.frameNbr = 0
+		self.myAddress = myAddress
 		
 	def createWidgets(self):
 		"""Build GUI."""
@@ -163,7 +164,6 @@ class Client:
 			# Update RTSP sequence number.
 			self.rtspSeq += 1
 
-		    print('\nPLAY event\n')
 			
 			# Write the RTSP request to be sent.
 			request = self.PLAY
@@ -176,7 +176,6 @@ class Client:
 			# Update RTSP sequence number.
 			self.rtspSeq += 1
 
-		    print('\nPAUSE event\n')
 			
 			# Write the RTSP request to be sent.
 			request = self.PAUSE
@@ -189,7 +188,6 @@ class Client:
 			# Update RTSP sequence number.
 			self.rtspSeq += 1
 
-		    print('\nTEARDOWN event\n')
 			
 			# Write the RTSP request to be sent.
 			request = self.TEARDOWN
@@ -202,7 +200,6 @@ class Client:
 		# Send the RTSP request using rtspSocket.
 		self.sendRtspRequest(request)
 		
-		print('\nData sent:\n' + request)
 	
 	def recvRtspReply(self):
 		"""Receive RTSP reply from the server."""
@@ -269,7 +266,7 @@ class Client:
 		
 		try:
 			# Bind the socket to the address using the RTP port given by the client user
-			self.rtpSocket.bind((self., self.rtpPort))
+			self.rtpSocket.bind((self.myAddress, self.rtpPort))
 			print('\nBind \n')
 		except:
 			tkMessageBox.showwarning('Unable to Bind', 'Unable to bind PORT=%d' %self.rtpPort)
