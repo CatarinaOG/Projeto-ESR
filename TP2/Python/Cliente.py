@@ -4,8 +4,8 @@ from ClienteGUI import ClienteGUI
 
 if __name__ == "__main__":
 	try:
-		addr = '127.0.0.1'
-		port = 25000
+		addr = '10.0.1.20'
+		port = 3000
 	except:
 		print("[Usage: Cliente.py]\n")	
 	

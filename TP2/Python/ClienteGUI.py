@@ -126,7 +126,7 @@ class ClienteGUI:
 		
 		try:
 			# Bind the socket to the address using the RTP port
-			self.rtpSocket.bind((self.addr, self.port))
+			self.rtpSocket.bind((self.addr, 3000))
 			print('\nBind \n')
 		except:
 			tkMessageBox.showwarning('Unable to Bind', 'Unable to bind PORT=%d' %self.rtpPort)
