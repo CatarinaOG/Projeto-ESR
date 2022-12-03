@@ -20,7 +20,11 @@ elif [ ${1} == "Node3" ]; then
 elif [ ${1} == "Node4" ]; then  
     echo "Node4"
     python3 oNode.py node 10.0.2.2 configNode.json
-fi
-    echo "bad request"
-    
+elif [ ${1} == "Client1" ]; then  
+    echo "Client1"
+    python3 oNode.py client 10.0.0.1
+elif [ ${1} == "Client2" ]; then  
+    echo "Client2"
+    python3 oNode.py client 10.0.5.1
+fi    
     

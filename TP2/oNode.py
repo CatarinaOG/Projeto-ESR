@@ -10,6 +10,7 @@ import json
 serverAddress = ''
 serverPort1 = 3000
 serverPort2 = 4000
+serverPort3 = 5000
 nodes_master = 0
 topology_master = {}
 isMaster = False
@@ -21,12 +22,19 @@ best_routes_to_nodes = {}
 
 nodePort1 = 3000
 nodePort2 = 4000
+nodePort3 = 5000
+
 myNeighbours = []
 ip_node = ''
 best_routes = {}
 neighboursFlood = []
 serversNode = []
 bestServer = {}
+
+
+# ------- Client Globals ---------
+
+nodeAddress = ''
 
 #-----------------------------Master------------------------------------
 
@@ -161,6 +169,9 @@ def server():
     global serverAddress
     global serverPort1
     global serverPort2
+    global serverPort3
+
+
     serverAddress = sys.argv[2]
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -168,6 +179,9 @@ def server():
 
     s1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s1.bind((serverAddress, serverPort2))
+
+    s2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s2.bind((serverAddress, serverPort3))
     
     getTopology()
 
@@ -183,7 +197,7 @@ def server():
     getFloodBack(s1) # necessário outra porta por alguma razão...
 
     #meter numa thread
-    sendMonitoring(s1)
+    sendMonitoring(s2)
     
 
 
@@ -297,7 +311,6 @@ def continueFlood(s):
         threading.Thread(target=continueEachFlood, args=(msg,add,s,lock)).start()
         
 
-#-----------------
 
 def sendBackFlood(s):
 
@@ -365,6 +378,26 @@ def continueMonitoring(s):
         threading.Thread(target=continueEachMonitoring, args=(msg,s,lock)).start()
 
 
+def connectEachClient(msg,add,s,lock):
+
+    global bestServer
+
+    info = json.loads(msg.decode('utf-8'))
+    print("connect from",add)
+    print("bestServer: ",bestServer)
+
+
+
+
+def connectClients(s):
+
+    lock = threading.Lock()
+
+    while(True):
+        msg, add = s.recvfrom(1024)
+        threading.Thread(target=connectEachClient, args=(msg,add,s,lock)).start()
+
+
 
 
 def node():
@@ -375,6 +408,8 @@ def node():
     global myNeighbours
     global nodePort1
     global nodePort2
+    global nodePort3
+
 
     ip_node = sys.argv[2]
 
@@ -384,6 +419,9 @@ def node():
     s1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s1.bind((ip_node, nodePort2))
 
+    s2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s2.bind((ip_node, nodePort3))
+
     serversNode = getServers()
     serverAddress = serversNode[0]
     myNeighbours = getNeighbours(s)
@@ -392,8 +430,33 @@ def node():
     time.sleep(5) # para tentar tirar...
     sendBackFlood(s1)
 
-    continueMonitoring(s1)
+    threading.Thread(target=continueMonitoring, args=(s1,)).start()
+    threading.Thread(target=connectClients, args=(s2,)).start()
+
+
+def connectToNode():
+
+    global nodeAddress
+    global nodePort3
+
+
+    nodeAddress = sys.argv[2]
+
+    info = {
+        "request" : "connect"
+    }
+
+    infoJSON = json.dumps(info)
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.sendto(infoJSON.encode('utf-8'), (nodeAddress, nodePort3))
+
     
+
+def client():
+
+    connectToNode()
+   
 
 
 
@@ -413,5 +476,9 @@ if __name__ == "__main__":
     elif(len(sys.argv) == 4 and sys.argv[1] == 'node'):
         # python3 teste.py node <ip_nodo> configNode.json
         node()
+    
+    elif(len(sys.argv) == 3 and sys.argv[1] == 'client'):
+        # python3 teste.py client <ip_nodo>
+        client()
 
 #----------------------------------------------------------
