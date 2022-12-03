@@ -93,6 +93,11 @@ def flood(s):
 
     for neighbour in neighbours:
         infoJSON = json.dumps(info)
+        
+        #print("-----------------------------------")
+        #print('Eviei para ' + getNodeName(neighbour))
+        #print("-----------------------------------")
+
         s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
 
 
@@ -202,11 +207,11 @@ def getNeighbours(s):
 def getNodeName(add):
 
     if (add == '10.0.3.1'): return "N2"
-    elif(add == '10.0.2.1'): return "N3"
+    elif(add == '10.0.6.2'): return "N3"
     elif(add == '10.0.5.1'): return "N1"
     elif(add == '10.0.3.10'): return "S1"
-    elif(add == '10.0.2.10'): return "S2"
-    elif(add == '10.0.6.2'): return "N4"
+    elif(add == '10.0.7.10'): return "S2"
+    elif(add == '10.0.2.2'): return "N4"
 
     
 
@@ -257,9 +262,9 @@ def continueEachFlood(msg : bytes, add : tuple, s : socket.socket, lock : thread
 
     info = json.loads(msg.decode('utf-8'))
 
-    print("-----------------------------------")
-    print('Recebi de ' + getNodeName(info['from']) + "--- ROUTE: ",getNodeNameInList(info['route']))
-    print("-----------------------------------")
+    #print("-----------------------------------")
+    #print('Recebi de ' + getNodeName(info['from']) + "--- ROUTE: ",getNodeNameInList(info['route']))
+    #print("-----------------------------------")
 
     changed = updateBestRoutes(info)
 
@@ -304,22 +309,12 @@ def sendBackFlood(s):
         s.sendto(infoJSON.encode('utf-8'), (server, serverPort2))
 
 
-
 def getServers():
 
     with open(sys.argv[3]) as json_file:
         file = json.load(json_file)
         return file['servers']
 
-
-#info = {
-#    "server" : serverAddress,
-#    "depth" : 0,
-#    "startTime" : time.time(),
-#    "totalDelay" : 0,
-#    "route" : best_routes_to_nodes[node]['route'],
-#    "path" : best_routes_to_nodes[node]['route']
-#}
 
 def continueEachMonitoring(msg,s,lock):
 
