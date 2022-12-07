@@ -136,7 +136,7 @@ class Client:
 		"""Connect to the Server. Start a new RTSP/TCP session."""
 		self.rtspSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
-			self.rtspSocket.connect(('10.0.2.10', 3000))
+			self.rtspSocket.connect((self.serverAddr, 3000))
 		except:
 			tkMessageBox.showwarning('Connection Failed', 'Connection to \'%s\' failed.' %self.serverAddr)
 	
@@ -146,7 +146,6 @@ class Client:
 		# TO COMPLETE
 		#-------------
 
-		
 		# Setup request
 		if requestCode == self.SETUP and self.state == self.INIT:
 			threading.Thread(target=self.recvRtspReply).start()

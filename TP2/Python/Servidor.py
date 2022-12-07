@@ -79,6 +79,3 @@ class Servidor:
 
 if __name__ == "__main__":
 	(Servidor()).main()
-
-
-

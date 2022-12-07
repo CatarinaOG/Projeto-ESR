@@ -270,25 +270,13 @@ def continueEachFlood(msg : bytes, add : tuple, s : socket.socket, lock : thread
     global myNeighbours
 
     changed = False
-
-    
     lock.acquire()
-
     info = json.loads(msg.decode('utf-8'))
-
-    #print("-----------------------------------")
-    #print('Recebi de ' + getNodeName(info['from']) + "--- ROUTE: ",getNodeNameInList(info['route']))
-    #print("-----------------------------------")
-
     changed = updateBestRoutes(info)
 
     if(changed):
         for neighbour in myNeighbours:
             if(neighbour != add[0]):
-
-                #print("-----------------------------------")
-                #print('Enviar para ' + getNodeName(neighbour) + "--- ROUTE: ",getNodeNameInList(info['route']))
-                #print("-----------------------------------")
 
                 infoJSON = json.dumps(best_routes[info['server']])
                 s.sendto(infoJSON.encode('utf-8'), (neighbour, nodePort1))
@@ -364,7 +352,6 @@ def continueEachMonitoring(msg,s,lock):
                     bestServer['depth'] = info['depth']
 
         lock.release()
-
         print("BestServer: ",bestServer)
 
 
@@ -385,7 +372,6 @@ def connectEachClient(msg,add,s,lock):
     info = json.loads(msg.decode('utf-8'))
     print("connect from",add)
     print("bestServer: ",bestServer)
-
 
 
 
