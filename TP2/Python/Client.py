@@ -20,12 +20,11 @@ class Client:
 	TEARDOWN = 3
 	
 	# Initiation..
-	def __init__(self, master, serveraddr, serverport, rtpport, filename,myAddress):
+	def __init__(self, master, serveraddr, rtpport, filename,myAddress):
 		self.master = master
 		self.master.protocol("WM_DELETE_WINDOW", self.handler)
 		self.createWidgets()
 		self.serverAddr = serveraddr
-		self.serverPort = int(serverport)
 		self.rtpPort = int(rtpport)
 		self.fileName = filename
 		self.rtspSeq = 0
@@ -136,7 +135,7 @@ class Client:
 		"""Connect to the Server. Start a new RTSP/TCP session."""
 		self.rtspSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
-			self.rtspSocket.connect((self.serverAddr, 3000))
+			self.rtspSocket.connect((self.serverAddr, 4000))
 		except:
 			tkMessageBox.showwarning('Connection Failed', 'Connection to \'%s\' failed.' %self.serverAddr)
 	
@@ -269,7 +268,7 @@ class Client:
 		
 		try:
 			# Bind the socket to the address using the RTP port given by the client user
-			self.rtpSocket.bind((self.myAddress, self.rtpPort))
+			self.rtpSocket.bind((self.myAddress, 4000))
 			print('\nBind \n')
 		except:
 			tkMessageBox.showwarning('Unable to Bind', 'Unable to bind PORT=%d' %self.rtpPort)

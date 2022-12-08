@@ -25,6 +25,6 @@ elif [ ${1} == "Client1" ]; then
     python3 oNode.py client 10.0.0.1
 elif [ ${1} == "Client2" ]; then  
     echo "Client2"
-    python3 oNode.py client 10.0.5.1
+    python3 oNode.py client 10.0.1.20 10.0.5.1
 fi    
     
