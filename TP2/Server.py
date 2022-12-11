@@ -114,7 +114,6 @@ class Server:
         nodes = 0
         
         while nodes < self.nodes_master:
-            print(nodes)
             msg, add = s.recvfrom(1024)
             threading.Thread(target=self.getEachFloodBack, args=(msg,add)).start()
             nodes += 1
@@ -154,8 +153,16 @@ class Server:
         lock = threading.Lock()
 
         lock.acquire()
-        self.actives.append(add[0])
+
+        if(info["type"] == 'active'):
+            self.actives.append(add[0])
+            print("adicionei ",add[0])
+        else:
+            self.actives.remove(add[0])
+            print("removi ",add[0])
+
         lock.release()
+
 
 
 
