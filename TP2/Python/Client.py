@@ -18,8 +18,9 @@ class Client:
 	PLAY = 1
 	PAUSE = 2
 	TEARDOWN = 3
+
+	count = 0
 	
-	# Initiation..
 	def __init__(self, master, serveraddr, rtpport, filename,myAddress):
 		self.master = master
 		self.master.protocol("WM_DELETE_WINDOW", self.handler)
@@ -36,7 +37,6 @@ class Client:
 		self.myAddress = myAddress
 		
 	def createWidgets(self):
-		"""Build GUI."""
 		# Create Setup button
 		self.setup = Button(self.master, width=20, padx=3, pady=3)
 		self.setup["text"] = "Setup"
@@ -89,32 +89,28 @@ class Client:
 		self.playEvent.clear()
 		self.sendRtspRequest(self.PLAY)
 	
-	def listenRtp(self):		
+	def listenRtp(self):	
+
 		"""Listen for RTP packets."""
-		while True:
-			try:
-				data = self.rtpSocket.recv(20480)
-				if data:
-					rtpPacket = RtpPacket()
-					rtpPacket.decode(data)
-					
-					currFrameNbr = rtpPacket.seqNum()
-					print("Current Seq Num: " + str(currFrameNbr))
-										
-					if currFrameNbr > self.frameNbr: # Discard the late packet
-						self.frameNbr = currFrameNbr
-						self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
-			except:
-				# Stop listening upon requesting PAUSE or TEARDOWN
-				if self.playEvent.isSet(): 
-					break
+		#while True:
+		try:
+			data = self.rtpSocket.recv(20480)
+			if data:
+				rtpPacket = RtpPacket()
+				rtpPacket.decode(data)
 				
-				# Upon receiving ACK for TEARDOWN request,
-				# close the RTP socket
-				if self.teardownAcked == 1:
-					self.rtpSocket.shutdown(socket.SHUT_RDWR)
-					self.rtpSocket.close()
-					break
+				currFrameNbr = rtpPacket.seqNum()
+									
+				self.frameNbr = currFrameNbr
+				self.updateMovie(self.writeFrame(rtpPacket.getPayload()))
+		except:
+			# Stop listening upon requesting PAUSE or TEARDOWN
+			
+			# Upon receiving ACK for TEARDOWN request,
+			# close the RTP socket
+			if self.teardownAcked == 1:
+				self.rtpSocket.shutdown(socket.SHUT_RDWR)
+				self.rtpSocket.close()
 					
 	def writeFrame(self, data):
 		"""Write the received frame to a temp image file. Return the image file."""
@@ -127,12 +123,14 @@ class Client:
 	
 	def updateMovie(self, imageFile):
 		"""Update the image file as video frame in the GUI."""
+		print(imageFile)
 		photo = ImageTk.PhotoImage(Image.open(imageFile))
 		self.label.configure(image = photo, height=288) 
 		self.label.image = photo
 		
 	def connectToServer(self):
 		"""Connect to the Server. Start a new RTSP/TCP session."""
+		
 		self.rtspSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
 			self.rtspSocket.connect((self.serverAddr, 4000))
@@ -140,10 +138,8 @@ class Client:
 			tkMessageBox.showwarning('Connection Failed', 'Connection to \'%s\' failed.' %self.serverAddr)
 	
 	def sendRtspRequest(self, requestCode):
+
 		"""Send RTSP request to the server."""	
-		#-------------
-		# TO COMPLETE
-		#-------------
 
 		# Setup request
 		if requestCode == self.SETUP and self.state == self.INIT:
@@ -216,6 +212,7 @@ class Client:
 				break
 	
 	def parseRtspReply(self, data):
+
 		"""Parse the RTSP reply from the server."""
 		lines = data.split('\n')
 		seqNum = int(lines[1].split(' ')[1])
@@ -242,7 +239,6 @@ class Client:
 
 			elif self.requestSent == self.PLAY:
 				self.state = self.PLAYING
-				print('\nPLAY sent\n')
 
 			elif self.requestSent == self.PAUSE:
 				self.state = self.READY
@@ -257,9 +253,7 @@ class Client:
 	
 	def openRtpPort(self):
 		"""Open RTP socket binded to a specified port."""
-		#-------------
-		# TO COMPLETE
-		#-------------
+
 		# Create a new datagram socket to receive RTP packets from the server
 		self.rtpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		
@@ -269,11 +263,11 @@ class Client:
 		try:
 			# Bind the socket to the address using the RTP port given by the client user
 			self.rtpSocket.bind((self.myAddress, 4000))
-			print('\nBind \n')
 		except:
 			tkMessageBox.showwarning('Unable to Bind', 'Unable to bind PORT=%d' %self.rtpPort)
 
 	def handler(self):
+
 		"""Handler on explicitly closing the GUI window."""
 		self.pauseMovie()
 		if tkMessageBox.askokcancel("Quit?", "Are you sure you want to quit?"):

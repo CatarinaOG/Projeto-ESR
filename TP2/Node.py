@@ -15,6 +15,8 @@ class Node:
     nodePort2 = 4000
     nodePort3 = 5000
     nodePort4 = 6000
+    nodePort5 = 7000
+
 
     myNeighbours = []
     ipNode = ''
@@ -24,8 +26,9 @@ class Node:
     bestServer = {}
     configFile = ''
 
-    activeClients = []
+    actives = []
     isActive = False
+    count = 0
 
 
     
@@ -46,16 +49,16 @@ class Node:
 
     def getNodeName(self,add):
 
-        #if (add == '10.0.3.1'): return "N2"
-        #elif(add == '10.0.6.2'): return "N3"
-        #elif(add == '10.0.5.1'): return "N1"
-        #elif(add == '10.0.3.10'): return "S1"
-        #elif(add == '10.0.7.10'): return "S2"
-        #elif(add == '10.0.2.2'): return "N4"
+        if (add == '10.0.3.1'): return "N2"
+        elif(add == '10.0.6.2'): return "N3"
+        elif(add == '10.0.5.1'): return "N1"
+        elif(add == '10.0.3.10'): return "S1"
+        elif(add == '10.0.7.10'): return "S2"
+        elif(add == '10.0.2.2'): return "N4"
 
-        if (add == '10.0.2.10'): return "S1"
-        elif(add == '10.0.2.1'): return "N1"
-        elif(add == '10.0.1.1'): return "N2"
+        #if (add == '10.0.2.10'): return "S1"
+        #elif(add == '10.0.2.1'): return "N1"
+        #elif(add == '10.0.1.1'): return "N2"
 
 
         
@@ -130,7 +133,7 @@ class Node:
 
 
     def sendBackFlood(self,s):
-        #print("sending back")
+        print("sending back")
 
         for server in self.bestRoutes:
             infoJSON = json.dumps(self.bestRoutes[server])
@@ -194,17 +197,26 @@ class Node:
 
         bestRouteCopy = list(self.bestRoutes[self.bestServer['server']]['route'])
         bestRouteCopy.pop()
-        send = json.dumps(bestRouteCopy)
 
-        s3.sendto(send.encode('utf-8'), (bestRouteCopy[0], self.nodePort4))
+        info = {
+            "route" : bestRouteCopy,
+            "nodeActive" : self.ipNode
+        }
+
+        send = json.dumps(info)
+        last = len(bestRouteCopy) - 1
+
+        s3.sendto(send.encode('utf-8'), (bestRouteCopy[last], self.nodePort4))
 
 
 
 
 
-    def connectEachClient(self,msg,add,lock,s3):
+    def connectEachClient(self,msg,add,s3):
 
         info = json.loads(msg.decode('utf-8'))
+
+        lock = threading.Lock()
 
         lock.acquire()
 
@@ -212,9 +224,10 @@ class Node:
             self.isActive = True
             self.sendActive(s3)
 
-        if(add[0] not in self.activeClients):
-            self.activeClients.append(add[0])
-
+        if(add[0] not in self.actives):
+            self.actives.append(add[0])
+        
+        print("cliente entered")
         lock.release()
 
 
@@ -222,16 +235,28 @@ class Node:
 
     def connectClients(self,s2,s3):
 
-        lock = threading.Lock()
-
         while(True):
             msg, add = s2.recvfrom(1024)
-            threading.Thread(target=self.connectEachClient, args=(msg,add,lock,s3)).start()
+            threading.Thread(target=self.connectEachClient, args=(msg,add,s3)).start()
             
 
-    def continueEachSendActive(self,msg,add):
 
-        print(json.loads(answer.decode('utf-8')))
+    def continueEachSendActive(self,msg,add,s3):
+
+        lock = threading.Lock()
+
+        info = json.loads(msg.decode('utf-8'))
+        info["route"].pop()
+
+        lock.acquire()
+        self.isActive = True
+        self.actives.append(add[0])
+        lock.release()
+
+        last = len(info["route"]) - 1
+        send = json.dumps(info)
+        s3.sendto(send.encode('utf-8'), (info["route"][last], self.nodePort4))
+
         
 
 
@@ -239,7 +264,24 @@ class Node:
 
         while(True):
             msg,add = s3.recvfrom(1024)
-            threading.Thread(target=self.continueEachSendActive, args=(msg,add)).start()
+            threading.Thread(target=self.continueEachSendActive, args=(msg,add,s3)).start()
+
+
+    def receiveEachPacketMovie(self,s4,msg):
+
+        self.count += 1
+
+        for dest in self.actives:
+            print("enviei para ",dest)
+            s4.sendto(msg,(dest,self.nodePort5))
+
+
+    def receiveMovie(self,s4):
+
+        while(True):
+            msg,add = s4.recvfrom(20480)
+            threading.Thread(target=self.receiveEachPacketMovie, args=(s4,msg)).start()
+
 
 
 
@@ -258,6 +300,9 @@ class Node:
         s3 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s3.bind((self.ipNode, self.nodePort4))
 
+        s4 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s4.bind((self.ipNode, self.nodePort5))
+
         self.serversNode = self.getServers()
         self.serverAddress = self.serversNode[0]
         self.myNeighbours = self.getNeighbours(s)
@@ -265,5 +310,7 @@ class Node:
         self.continueFlood(s,s1)
 
         threading.Thread(target=self.continueMonitoring, args=(s1,)).start()
-        threading.Thread(target=self.continueSendActive, args=(s3)).start()
+        threading.Thread(target=self.continueSendActive, args=(s3,)).start()
         threading.Thread(target=self.connectClients, args=(s2,s3)).start()
+        threading.Thread(target=self.receiveMovie, args=(s4,)).start()
+

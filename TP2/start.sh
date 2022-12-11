@@ -22,7 +22,7 @@ elif [ ${1} == "Node4" ]; then
     python3 oNode.py node 10.0.2.2 configNode.json
 elif [ ${1} == "Client1" ]; then  
     echo "Client1"
-    python3 oNode.py client 10.0.0.1
+    python3 oNode.py client 10.0.0.20 10.0.5.1
 elif [ ${1} == "Client2" ]; then  
     echo "Client2"
     python3 oNode.py client 10.0.1.20 10.0.5.1

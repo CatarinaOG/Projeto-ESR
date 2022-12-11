@@ -5,6 +5,9 @@ import time
 import sys
 import json
 
+from VideoStream import VideoStream
+from RtpPacket import RtpPacket
+
 class Server:	
 
     nodePort1 = 3000
@@ -15,16 +18,23 @@ class Server:
     serverPort2 = 4000
     serverPort3 = 5000
     serverPort4 = 6000
+    serverPort5 = 7000
+
+    filename = 'movie.Mjpeg'
 
     nodes_master = 0
     topology_master = {}
     isMaster = False
     servers = []
     best_routes_to_nodes = {}
+    actives = []
+
+    count = 0
     
     def __init__(self,isMaster,serverAddress):
         self.isMaster = isMaster
         self.serverAddress = serverAddress
+        self.videoStream = VideoStream(self.filename)
 
     def getTopology(self):
 
@@ -110,7 +120,7 @@ class Server:
             nodes += 1
 
 
-    def sendMonitoring(self,s):
+    def sendMonitoring(self,s2):
 
         while(True):
 
@@ -132,12 +142,78 @@ class Server:
 
                 nextHop = copy_routes[0]
                 infoJSON = json.dumps(info)
-                s.sendto(infoJSON.encode('utf-8'), (nextHop, self.nodePort2))
+                s2.sendto(infoJSON.encode('utf-8'), (nextHop, self.nodePort2))
 
             time.sleep(20)
 
-    def updateActives():
-        print("hello")
+
+    def updateEachActives(self,msg,add):
+
+        info = json.loads(msg.decode('utf-8'))
+
+        lock = threading.Lock()
+
+        lock.acquire()
+        self.actives.append(add[0])
+        lock.release()
+
+
+
+    def updateActives(self,s3):
+
+        while(True):
+            msg, add = s3.recvfrom(1024)
+            threading.Thread(target=self.updateEachActives, args=(msg,add)).start()
+    
+
+    def makeRtp(self, payload, frameNbr):
+        version = 2
+        padding = 0
+        extension = 0
+        cc = 0
+        marker = 0
+        pt = 26 # MJPEG type
+        seqnum = frameNbr
+        ssrc = 0 
+        
+        rtpPacket = RtpPacket()
+        rtpPacket.encode(version, padding, extension, cc, seqnum, marker, pt, ssrc, payload)
+        return rtpPacket.getPacket()
+
+
+    def sendRtp(self):
+
+        while True:
+
+            data = self.videoStream.nextFrame()
+
+            if data: 
+
+                time.sleep(0.05)
+
+                for neighbourActive in self.actives:
+            
+                    frameNumber = self.videoStream.frameNbr()
+
+                    try:
+                        self.rtpSocket.sendto(self.makeRtp(data, frameNumber),(neighbourActive,self.serverPort5))
+                    except:
+                        print("Connection Error")
+
+            else : 
+                self.videoStream = VideoStream(self.filename)
+
+                    
+
+
+    def sendMovie(self):
+
+        while(True):
+            if(len(self.actives) > 0):
+                self.rtpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self.sendRtp()
+
+
 
     def run(self):
 
@@ -153,6 +229,7 @@ class Server:
         s3 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s3.bind((self.serverAddress, self.serverPort4))
 
+
         self.getTopology()
 
         if(self.isMaster):
@@ -166,7 +243,9 @@ class Server:
         self.flood(s)
         self.getFloodBack(s1) # necessário outra porta por alguma razão...
 
-        threading.Thread(target=self.sendMonitoring(s2), args=(msg,add)).start()
-        threading.Thread(target=self.updateActives(s3), args=(msg,add)).start()
+        threading.Thread(target=self.sendMonitoring, args=(s2,)).start()
+        threading.Thread(target=self.updateActives, args=(s3,)).start()
+        threading.Thread(target=self.sendMovie, args=()).start()
+
 
         

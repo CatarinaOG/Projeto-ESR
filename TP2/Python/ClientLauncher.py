@@ -9,7 +9,7 @@ if __name__ == "__main__":
 		fileName = sys.argv[3]
 		myAddress = sys.argv[4]
 	except:
-		print("[Usage: ClientLauncher.py Server_address Server_port RTP_port Video_file clientAddress]\n")	
+		print("[Usage: ClientLauncher.py Server_address RTP_port Video_file clientAddress]\n")	
 	
 	root = Tk()
 	
