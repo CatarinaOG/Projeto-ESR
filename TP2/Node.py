@@ -16,6 +16,8 @@ class Node:
     nodePort3 = 5000
     nodePort4 = 6000
     nodePort5 = 7000
+    nodePort6 = 8000
+
 
 
     myNeighbours = []
@@ -24,6 +26,7 @@ class Node:
     neighboursFlood = []
     serversNode = []
     bestServer = {}
+    serversMonitorization = {}
     configFile = ''
 
     actives = []
@@ -103,10 +106,15 @@ class Node:
         info = json.loads(msg.decode('utf-8'))
         changed = self.updateBestRoutes(info)
 
+        #if('10.0.3.10' in self.bestRoutes.keys()):
+        #    print("best route1: ",self.getNodeNameInList(self.bestRoutes['10.0.3.10']['route']))
+#
+        #if('10.0.7.10' in self.bestRoutes.keys()):
+        #    print("best route2: ",self.getNodeNameInList(self.bestRoutes['10.0.7.10']['route']))
+
         if(changed):
             for neighbour in self.myNeighbours:
                 if(neighbour != add[0]):
-
                     infoJSON = json.dumps(self.bestRoutes[info['server']])
                     s.sendto(infoJSON.encode('utf-8'), (neighbour, self.nodePort1))
 
@@ -142,6 +150,47 @@ class Node:
             file = json.load(json_file)
             return file['servers']
 
+    def getNewBestServer(self,s3):
+
+        if(self.bestServer):
+            oldServer = self.bestServer['server']
+            existed = True
+        
+        self.bestServer = {}
+
+        for server in self.serversMonitorization:
+
+            serverInfo = self.serversMonitorization[server]
+
+            if(not self.bestServer):
+                self.bestServer['server'] = serverInfo['server']
+                self.bestServer['delay'] = serverInfo['totalDelay']
+                self.bestServer['depth'] = serverInfo['depth']
+            
+            else:
+                if(self.bestServer['delay'] == serverInfo['totalDelay'] * 1.5):
+                    if(self.bestServer['depth'] >= serverInfo['depth']):
+                        self.bestServer['server'] = serverInfo['server']
+                        self.bestServer['delay'] = serverInfo['totalDelay']
+                        self.bestServer['depth'] = serverInfo['depth']
+
+                else:
+                    if(self.bestServer['delay'] > serverInfo['totalDelay'] * 1.5):
+                        self.bestServer['server'] = serverInfo['server']
+                        self.bestServer['delay'] = serverInfo['totalDelay']
+                        self.bestServer['depth'] = serverInfo['depth']
+
+
+            print("from: ",server,"-----delay: ",serverInfo['totalDelay'], )
+            print("best: ",self.bestServer['server'],"-----delay: ",self.bestServer['delay'])
+
+        if((self.isActive and not existed) or (self.isActive and oldServer != self.bestServer['server'])):
+            print("enviei active e inactive")
+            self.sendActive(s3)
+            self.sendInactive(s3,oldServer)
+
+        
+        
 
     def continueEachMonitoring(self,msg,s1,s3,lock):
 
@@ -157,40 +206,9 @@ class Node:
             lock.acquire()
             info["totalDelay"] = time.time() - info["startTime"]
 
-            
-
-            
-            if(not self.bestServer):
-                self.bestServer['server'] = info['server']
-                self.bestServer['delay'] = info['totalDelay']
-                self.bestServer['depth'] = info['depth']
-
-            else:
-                print("old: ",self.bestServer['delay'], "de ",self.bestServer['server'])
-                print("novo: ",info['totalDelay'], "de ",info['server'])
-                if(self.bestServer['delay'] == info['totalDelay']):
-                    if(self.bestServer['depth'] >= info['depth']):
-                        oldBestServer = self.bestServer['server'] 
-                        self.bestServer['server'] = info['server']
-                        self.bestServer['delay'] = info['totalDelay']
-                        self.bestServer['depth'] = info['depth']
-
-                        if(self.isActive):
-                            print("enviei active e inactive")
-                            self.sendActive(s3)
-                            self.sendInactive(s3,oldBestServer)
-
-                else:
-                    if(self.bestServer['delay'] > info['totalDelay']):
-                        oldBestServer = self.bestServer['server'] 
-                        self.bestServer['server'] = info['server']
-                        self.bestServer['delay'] = info['totalDelay']
-                        self.bestServer['depth'] = info['depth']
-
-                        if(self.isActive):
-                            print("enviei active e inactive")
-                            self.sendActive(s3)
-                            self.sendInactive(s3,oldBestServer)
+            self.serversMonitorization[info['server']] = info
+            self.getNewBestServer(s3)
+                
 
             lock.release()
 
@@ -214,21 +232,20 @@ class Node:
         info = {
             "route" : bestRouteCopy,
             "type": "active",
-            "nodeActive" : self.ipNode
+            "nodeActive" : self.ipNode # retirar
         }
 
         send = json.dumps(info)
         last = len(bestRouteCopy) - 1
 
         s3.sendto(send.encode('utf-8'), (bestRouteCopy[last], self.nodePort4))
-        print("enviei active")
 
 
 
 
-    def sendInactive(self,s3,oldBestServer):
+    def sendInactive(self,s3,bestServer):
 
-        bestRouteCopy = list(self.bestRoutes[oldBestServer]['route'])
+        bestRouteCopy = list(self.bestRoutes[bestServer]['route'])
         bestRouteCopy.pop()
 
         info = {
@@ -241,7 +258,6 @@ class Node:
         last = len(bestRouteCopy) - 1
 
         s3.sendto(send.encode('utf-8'), (bestRouteCopy[last], self.nodePort4))
-        print("enviei inactive")
 
 
 
@@ -283,13 +299,15 @@ class Node:
         lock.acquire()
 
         if(info["type"] == 'active'):
-            self.isActive = True
             self.actives.append(add[0])
 
-            last = len(info["route"]) - 1
-            send = json.dumps(info)
-            s3.sendto(send.encode('utf-8'), (info["route"][last], self.nodePort4))
-            print("adicionei-me")
+            if(not self.isActive):
+                self.isActive = True
+
+                last = len(info["route"]) - 1
+                send = json.dumps(info)
+                s3.sendto(send.encode('utf-8'), (info["route"][last], self.nodePort4))
+                print("Adicionei-me")
 
         else:
             self.actives.remove(add[0])
@@ -299,7 +317,7 @@ class Node:
                 last = len(info["route"]) - 1
                 send = json.dumps(info)
                 s3.sendto(send.encode('utf-8'), (info["route"][last], self.nodePort4))
-                print("Tambem me removi")
+                print("Removi-me")
         
         lock.release()
 
@@ -316,8 +334,6 @@ class Node:
 
     def receiveEachPacketMovie(self,s4,msg):
 
-        self.count += 1
-
         for dest in self.actives:
             s4.sendto(msg,(dest,self.nodePort5))
 
@@ -327,6 +343,23 @@ class Node:
         while(True):
             msg,add = s4.recvfrom(20480)
             threading.Thread(target=self.receiveEachPacketMovie, args=(s4,msg)).start()
+
+
+    def listenToClient(self,s5,s3):
+
+        while(True):
+            msg,add = s5.recvfrom(1024)
+            info = json.loads(msg.decode('utf-8'))
+            print("recebi stop")
+
+            if(info['command'] == 'stop'):
+                self.actives.remove(add[0])
+                
+                if(len(self.actives) == 0):
+                    self.isActive = False
+                    self.sendInactive(s3,self.bestServer['server'])
+
+
 
 
 
@@ -349,6 +382,9 @@ class Node:
         s4 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s4.bind((self.ipNode, self.nodePort5))
 
+        s5 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s5.bind((self.ipNode, self.nodePort6))
+
         self.serversNode = self.getServers()
         self.serverAddress = self.serversNode[0]
         self.myNeighbours = self.getNeighbours(s)
@@ -359,4 +395,6 @@ class Node:
         threading.Thread(target=self.continueSendActive, args=(s3,)).start()
         threading.Thread(target=self.connectClients, args=(s2,s3)).start()
         threading.Thread(target=self.receiveMovie, args=(s4,)).start()
+        threading.Thread(target=self.listenToClient, args=(s5,s3)).start()
+
 

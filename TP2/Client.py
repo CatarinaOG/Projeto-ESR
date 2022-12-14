@@ -41,7 +41,7 @@ class Client:
         self.connectToNode(s)
 
         root = Tk()
-        clientStream = ClientStream(root,self.clientAddress,self.nodePort5)
+        clientStream = ClientStream(root,self.clientAddress,self.nodePort5,self.nodeAddress)
         root.mainloop()
         
 

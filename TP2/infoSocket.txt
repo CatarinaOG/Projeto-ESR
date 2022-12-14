@@ -1,7 +1,0 @@
-(<socket.socket, 
-	fd = 4,
-	family=AddressFamily.AF_INET,
-	type=SocketKind.SOCKET_STREAM,
-	proto=0, laddr=("10.0.2.10",4000),
-	raddr=("10.0.0.20",52366)>
- ,("10.0.0.20,52366))

@@ -23,7 +23,7 @@ class Server:
     filename = 'movie.Mjpeg'
 
     nodes_master = 0
-    topology_master = {}
+    topology = {}
     isMaster = False
     servers = []
     best_routes_to_nodes = {}
@@ -41,9 +41,9 @@ class Server:
         with open(sys.argv[3]) as json_file:
             file = json.load(json_file)
             self.servers = file['servers']
-            self.topology_master = file['neighbours']
+            self.topology = file['neighbours']
 
-        for key in self.topology_master:
+        for key in self.topology:
             self.nodes_master += 1
 
         self.nodes_master -= 1 + len(self.servers)
@@ -54,10 +54,10 @@ class Server:
         
         if(msg.decode('utf-8') == "neighbours"):
 
-            response = self.topology_master[add[0]]
+            response = self.topology[add[0]]
             
             info = {
-                'ip' : add[0],
+                'ip' : add[0], #retirar
                 'neighbours' : response
             }
 
@@ -79,7 +79,7 @@ class Server:
 
     def flood(self,s):
 
-        neighbours = self.topology_master[self.serverAddress]
+        neighbours = self.topology[self.serverAddress]
 
         info = {
             "server" : self.serverAddress,
@@ -93,7 +93,6 @@ class Server:
 
         for neighbour in neighbours:
             infoJSON = json.dumps(info)
-            
             s.sendto(infoJSON.encode('utf-8'), (neighbour, self.nodePort1))
 
 
@@ -127,6 +126,7 @@ class Server:
             print("send monitoring")
 
             for node in self.best_routes_to_nodes:
+
                 copy_routes = list(self.best_routes_to_nodes[node]['route'])
                 copy_routes.pop(0)
 
@@ -135,7 +135,7 @@ class Server:
                     "depth" : len(copy_routes),
                     "startTime" : time.time(),
                     "totalDelay" : 0,
-                    "route" : self.best_routes_to_nodes[node]['route'],
+                    "route" : self.best_routes_to_nodes[node]['route'], #retirar
                     "path" : copy_routes
                 }
 
@@ -156,10 +156,10 @@ class Server:
 
         if(info["type"] == 'active'):
             self.actives.append(add[0])
-            print("adicionei ",add[0])
         else:
             self.actives.remove(add[0])
-            print("removi ",add[0])
+
+        print(self.actives)
 
         lock.release()
 

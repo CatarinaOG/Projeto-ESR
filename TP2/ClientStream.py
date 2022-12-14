@@ -4,6 +4,7 @@ from tkinter import *
 import tkinter.messagebox
 from PIL import Image, ImageTk
 import socket, threading, sys, traceback, os
+import json
 
 CACHE_FILE_NAME = "cache-"
 CACHE_FILE_EXT = ".jpg"
@@ -16,12 +17,15 @@ class ClientStream:
 	frameNbr = 0
 	sessionId = 0
 
+	nodePort6 = 8000
 
-	def __init__(self,master,clientAddress,clientPort):
+
+	def __init__(self,master,clientAddress,clientPort,nodeAddress):
 		self.master = master
 		self.master.protocol("WM_DELETE_WINDOW", self.handler)
 		self.clientAddress = clientAddress
 		self.clientPort = clientPort
+		self.nodeAddress = nodeAddress
 		self.createWidgets()
 		self.openRtpPort()
 
@@ -59,13 +63,33 @@ class ClientStream:
 	def playMovie(self):	
 		"""Listen for RTP packets."""
 		threading.Thread(target=self.listenRtp).start()
-		
+	
+
+	def stopRtp(self):
+		print("entrei'2")
+
+		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		s.bind((self.clientAddress,self.nodePort6))
+
+		send = {
+			"command" : "stop"
+		}
+
+		infoJSON = json.dumps(send)
+		s.sendto(infoJSON.encode('utf-8'), (self.nodeAddress, self.nodePort6))
+
+
+	def stopMovie(self):	
+		"""Listen for RTP packets."""
+		print("entrei'1")
+		threading.Thread(target=self.stopRtp).start()
+
 
 			
 	def writeFrame(self, data):
 		"""Write the received frame to a temp image file. Return the image file."""
 
-		cachename = CACHE_FILE_NAME + str(0) + CACHE_FILE_EXT
+		cachename = CACHE_FILE_NAME + str(self.clientAddress) + CACHE_FILE_EXT
 		file = open(cachename, "wb")
 		file.write(data)
 		file.close()
@@ -100,6 +124,7 @@ class ClientStream:
 		# Create Teardown button
 		self.teardown = Button(self.master, width=20, padx=3, pady=3)
 		self.teardown["text"] = "Teardown"
+		self.teardown["command"] = self.stopMovie
 		self.teardown.grid(row=1, column=3, padx=2, pady=2)
 		
 		# Create a label to display the movie
@@ -111,4 +136,4 @@ class ClientStream:
 
 		if (tkMessageBox.askokcancel("Quit?", "Are you sure you want to quit?")):
 			self.master.destroy() # Close the gui window
-			os.remove(CACHE_FILE_NAME + str(self.sessionId) + CACHE_FILE_EXT) # Delete the cache image from video
+			os.remove(CACHE_FILE_NAME + str(self.clientAddress) + CACHE_FILE_EXT) # Delete the cache image from video
