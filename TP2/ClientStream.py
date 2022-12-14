@@ -38,7 +38,7 @@ class ClientStream:
 
 		
 		# Set the timeout value of the socket to 0.5sec
-		self.rtpSocket.settimeout(5)
+		self.rtpSocket.settimeout(10)
 		
 		try:
 			# Bind the socket to the address using the RTP port given by the client user
